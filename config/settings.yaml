@@ -1,0 +1,11 @@
+project:
+  name: Agentic AI Interview Generator
+  version: 0.1
+
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.3
+
+memory:
+  enabled: true
