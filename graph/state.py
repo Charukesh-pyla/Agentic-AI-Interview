@@ -12,3 +12,4 @@ class GraphState(BaseModel):
     questions: Optional[Dict[str, Any]] = None
     validation_result: Optional[Dict[str, Any]] = None
     feedback: Optional[Dict[str, Any]] = None
+    resume_path: Optional[str] = None
