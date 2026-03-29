@@ -39,8 +39,10 @@ def main():
 
     state = question_generator_agent(state)
 
-    print("\nQUESTIONS:\n")
+    print("QUESTIONS:")
     print(state.questions)
+    print("DSA count:", len(state.questions.get("DSA", [])))
+    print("CSF count:", len(state.questions.get("CSF", [])))
 
 
 if __name__ == "__main__":

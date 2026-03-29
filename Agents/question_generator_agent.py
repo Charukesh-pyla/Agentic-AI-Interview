@@ -6,8 +6,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai.errors import ClientError
 
-
 load_dotenv()
+
+MAX_RETRIES = 1
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -23,6 +24,26 @@ def _extract_json(text: str) -> Dict[str, Any]:
         raise ValueError("No valid JSON object found in model response.")
 
     return json.loads(text[start:end + 1])
+
+
+def _quick_llm_check(client, question_text: str) -> bool:
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"""
+Check if the following interview question is logically correct.
+
+Return ONLY one word:
+VALID or INVALID
+
+Question:
+{question_text}
+"""
+        )
+        result = response.text.strip().upper()
+        return "VALID" in result
+    except:
+        return True  # fail-safe
 
 
 def _build_prompt(
@@ -58,7 +79,7 @@ Requirements:
 7. Do NOT include solutions yet.
 8. If recruiter hint is partial, expand it into a full polished problem.
 9. If mode is "similar", generate a similar question, not the exact same one.
-10. Return STRICT JSON only. No markdown. No explanation outside JSON.
+10. Return STRICT JSON only.
 
 Return format:
 {{
@@ -95,15 +116,10 @@ Difficulty: {difficulty}
 Recruiter Hint: {hint_text}
 
 Requirements:
-1. Generate Computer Science Fundamentals interview questions.
-2. Topics may include OS, DBMS, CN, OOP and similar fundamentals.
-3. Questions must be logically correct and interview-safe.
-4. Questions should be theory-based, scenario-based, or concept-application based.
-5. Include expected answer points for interviewer reference.
-6. Include 2 to 3 follow-up questions.
-7. If recruiter hint is partial, expand it into a full polished question.
-8. If mode is "similar", generate a similar question, not the exact same one.
-9. Return STRICT JSON only. No markdown. No explanation outside JSON.
+1. Generate Computer Science Fundamentals questions.
+2. Include expected answer points.
+3. Include 2 to 3 follow-up questions.
+4. Return STRICT JSON only.
 
 Return format:
 {{
@@ -122,17 +138,7 @@ Return format:
 
     else:
         return f"""
-You are an expert technical interviewer.
-
-Generate {question_count} high-quality interview question(s) in STRICT JSON ONLY.
-
-Mode: {mode}
-Domain: {domain}
-Topics: {topics_text}
-Difficulty: {difficulty}
-Recruiter Hint: {hint_text}
-
-Return STRICT JSON only.
+Generate {question_count} interview questions in STRICT JSON.
 
 Return format:
 {{
@@ -149,15 +155,12 @@ Return format:
 
 
 def _validate_question_structure(question: Dict[str, Any], domain: str) -> bool:
+
     if domain == "DSA":
         required_fields = [
-            "title",
-            "topic",
-            "difficulty",
-            "problem_statement",
-            "constraints",
-            "examples",
-            "edge_cases",
+            "title", "topic", "difficulty",
+            "problem_statement", "constraints",
+            "examples", "edge_cases"
         ]
 
         for field in required_fields:
@@ -170,30 +173,18 @@ def _validate_question_structure(question: Dict[str, Any], domain: str) -> bool:
         if not isinstance(question["examples"], list) or not question["examples"]:
             return False
 
-        if not isinstance(question["edge_cases"], list) or not question["edge_cases"]:
-            return False
-
         return True
 
     elif domain == "CSF":
         required_fields = [
-            "title",
-            "topic",
-            "difficulty",
-            "question",
-            "expected_answer_points",
-            "follow_up_questions",
+            "title", "topic", "difficulty",
+            "question", "expected_answer_points",
+            "follow_up_questions"
         ]
 
         for field in required_fields:
             if field not in question:
                 return False
-
-        if not isinstance(question["expected_answer_points"], list) or not question["expected_answer_points"]:
-            return False
-
-        if not isinstance(question["follow_up_questions"], list) or not question["follow_up_questions"]:
-            return False
 
         return True
 
@@ -201,9 +192,10 @@ def _validate_question_structure(question: Dict[str, Any], domain: str) -> bool:
 
 
 def question_generator_agent(state):
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment variables.")
+        raise ValueError("GEMINI_API_KEY not found")
 
     client = genai.Client(api_key=api_key)
 
@@ -215,6 +207,7 @@ def question_generator_agent(state):
     generated_questions = {}
 
     for domain, topics in selected_topics.items():
+
         if not topics:
             generated_questions[domain] = []
             continue
@@ -223,12 +216,8 @@ def question_generator_agent(state):
         question_count = interview_config["question_count"].get(domain, 1)
 
         prompt = _build_prompt(
-            domain=domain,
-            topics=topics,
-            difficulty=difficulty,
-            question_count=question_count,
-            recruiter_hint=recruiter_hint,
-            mode=generation_mode
+            domain, topics, difficulty,
+            question_count, recruiter_hint, generation_mode
         )
 
         try:
@@ -239,26 +228,58 @@ def question_generator_agent(state):
             parsed = _extract_json(response.text)
 
         except ClientError as e:
-            generated_questions[domain] = {
-                "error": f"Gemini API quota exceeded or request failed: {str(e)}"
-            }
+            generated_questions[domain] = {"error": str(e)}
             continue
 
         except Exception as e:
-            generated_questions[domain] = {
-                "error": f"Unexpected error: {str(e)}"
-            }
+            generated_questions[domain] = {"error": str(e)}
             continue
 
         questions = parsed.get("questions", [])
-
         valid_questions = []
+
         for q in questions:
-            if _validate_question_structure(q, domain):
+
+            is_valid = _validate_question_structure(q, domain)
+
+            if is_valid:
+                is_valid = _quick_llm_check(client, str(q))
+
+            retries = 0
+
+            while not is_valid and retries < MAX_RETRIES:
+                retries += 1
+
+                try:
+                    fix_prompt = f"""
+Fix this interview question. Return STRICT JSON.
+
+Question:
+{q}
+"""
+
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=fix_prompt
+                    )
+
+                    fixed = _extract_json(response.text)
+                    new_q = fixed.get("questions", [None])[0]
+
+                    if new_q and _validate_question_structure(new_q, domain):
+                        is_valid = _quick_llm_check(client, str(new_q))
+                        if is_valid:
+                            q = new_q
+                            break
+
+                except:
+                    break
+
+            if is_valid:
                 valid_questions.append(q)
 
-        print(f"\nRAW PARSED OUTPUT FOR {domain}:\n{parsed}")
         generated_questions[domain] = valid_questions
+        
 
     state.questions = generated_questions
     return state
