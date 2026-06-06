@@ -26,10 +26,34 @@ def _extract_json(text: str) -> Dict[str, Any]:
     return json.loads(text[start:end + 1])
 
 
+def _generate_content_with_fallback(client, contents: str, **kwargs):
+    # Models to try in order of preference.
+    # We will try gemini-3.5-flash first, and fallback to lighter/older models if rate-limited (429) or unavailable (503).
+    models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+    last_err = None
+    for model_name in models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                **kwargs
+            )
+            return response
+        except Exception as e:
+            err_str = str(e).upper()
+            if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str or "UNAVAILABLE" in err_str or "503" in err_str:
+                print(f"Warning: Model {model_name} failed due to rate limit/quota or service unavailable. Retrying with next fallback model...")
+                last_err = e
+                continue
+            else:
+                raise e
+    raise last_err
+
+
 def _quick_llm_check(client, question_text: str) -> bool:
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = _generate_content_with_fallback(
+            client,
             contents=f"""
 Check if the following interview question is logically correct.
 
@@ -221,8 +245,8 @@ def question_generator_agent(state):
         )
 
         try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
+            response = _generate_content_with_fallback(
+                client,
                 contents=prompt
             )
             parsed = _extract_json(response.text)
@@ -258,8 +282,8 @@ Question:
 {q}
 """
 
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                    response = _generate_content_with_fallback(
+                        client,
                         contents=fix_prompt
                     )
 

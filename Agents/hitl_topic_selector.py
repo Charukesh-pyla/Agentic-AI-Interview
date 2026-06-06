@@ -35,24 +35,38 @@ def hitl_topic_selector_agent(state):
     state.topic_summary = topic_summary
 
     # ---------------------------
-    # CLI interaction (for now)
+    # Determine choice from API config or CLI
     # ---------------------------
-    print("\nCandidate Topic Summary\n")
+    strategy_mapping = {
+        "Focus on Strong Topics": "1",
+        "Balanced Interview": "2",
+        "Challenge Weak Topics": "3",
+        "Manual Topic Selection": "4"
+    }
+    
+    choice = "2" # default
+    if getattr(state, "interview_config", None) and state.interview_config.get("strategy"):
+        strategy_name = state.interview_config.get("strategy")
+        choice = strategy_mapping.get(strategy_name, "2")
+    else:
+        # CLI fallback
+        print("\nCandidate Topic Summary\n")
+        for domain, summary in topic_summary.items():
+            print(f"\n{domain}")
+            print("Strong:", summary["strong"])
+            print("Medium:", summary["medium"])
+            print("Weak:", summary["weak"])
 
-    for domain, summary in topic_summary.items():
+        print("\nSelect Interview Strategy:")
+        print("1 -> Focus on Strong topics")
+        print("2 -> Balanced interview (default)")
+        print("3 -> Challenge Weak topics")
+        print("4 -> Manual topic selection")
 
-        print(f"\n{domain}")
-        print("Strong:", summary["strong"])
-        print("Medium:", summary["medium"])
-        print("Weak:", summary["weak"])
-
-    print("\nSelect Interview Strategy:")
-    print("1 → Focus on Strong topics")
-    print("2 → Balanced interview (default)")
-    print("3 → Challenge Weak topics")
-    print("4 → Manual topic selection")
-
-    choice = input("\nEnter choice: ").strip()
+        try:
+            choice = input("\nEnter choice: ").strip()
+        except EOFError:
+            choice = "2"
 
     # Default fallback
     if choice not in ["1", "2", "3", "4"]:
@@ -77,11 +91,20 @@ def hitl_topic_selector_agent(state):
             selected = weak
 
         else:
-            manual = input(
-                f"\nEnter topics for {domain} separated by comma: "
-            ).strip()
-
-            selected = [t.strip() for t in manual.split(",") if t.strip()]
+            config_selected = None
+            if getattr(state, "interview_config", None) and state.interview_config.get("selected_topics"):
+                config_selected = state.interview_config["selected_topics"].get(domain)
+            
+            if config_selected is not None:
+                selected = config_selected
+            else:
+                try:
+                    manual = input(
+                        f"\nEnter topics for {domain} separated by comma: "
+                    ).strip()
+                    selected = [t.strip() for t in manual.split(",") if t.strip()]
+                except EOFError:
+                    selected = []
 
         selected_topics[domain] = selected
 

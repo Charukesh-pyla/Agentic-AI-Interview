@@ -27,6 +27,17 @@ def domain_strength_reasoning_agent(state):
 
                 dsa_topics[topic] = level
 
+        if not dsa_topics:
+            dsa_topics = {
+                "Array": "Strong",
+                "Hash Table": "Medium",
+                "Math": "Medium",
+                "String": "Medium",
+                "Sorting": "Medium",
+                "Dynamic Programming": "Weak",
+                "Divide and Conquer": "Weak"
+            }
+
         domain_strengths["DSA"] = dsa_topics
 
     # ---------------- CSF Reasoning ----------------
@@ -38,6 +49,12 @@ def domain_strength_reasoning_agent(state):
         for topic in resume_insights.get("csf_exposure", []):
 
             csf_topics[topic] = "Medium"
+
+        if not csf_topics:
+            csf_topics = {
+                "OS": "Medium",
+                "DBMS": "Medium"
+            }
 
         domain_strengths["CSF"] = csf_topics
 

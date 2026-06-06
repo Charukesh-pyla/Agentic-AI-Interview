@@ -42,23 +42,47 @@ def resume_understanding_agent(state):
         "csf_exposure": []
     }
 
-    if "python" in resume_lower:
-        resume_insights["skills_detected"].append("Python")
+    import re
+    common_skills = [
+        "Python", "Java", "C#", "Rust", "JavaScript", "TypeScript",
+        "React", "Next.js", "Angular", "Vue", "Node.js", "Express", "FastAPI", "Flask", "Django",
+        "MongoDB", "SQL", "PostgreSQL", "MySQL", "SQLite", "Redis", "Tailwind", "Bootstrap",
+        "HTML", "CSS", "Git", "GitHub", "Docker", "Kubernetes", "AWS", "Azure", "GCP",
+        "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "NLP", "OpenAI", "GPT",
+        "JWT", "GraphQL"
+    ]
 
-    if "java" in resume_lower:
-        resume_insights["skills_detected"].append("Java")
+    for skill in common_skills:
+        if skill.lower() in resume_lower:
+            resume_insights["skills_detected"].append(skill)
 
-    if "data structures" in resume_lower:
-        resume_insights["dsa_exposure"].append("General DSA")
+    if "c++" in resume_lower:
+        resume_insights["skills_detected"].append("C++")
+    if re.search(r"\bgo\b", resume_lower):
+        resume_insights["skills_detected"].append("Go")
+    if re.search(r"\bc\b", resume_lower) and not "c++" in resume_lower:
+        resume_insights["skills_detected"].append("C")
 
-    if "graph" in resume_lower:
-        resume_insights["dsa_exposure"].append("Graphs")
+    # DSA Exposure
+    dsa_keywords = {
+        "General DSA": ["data structures", "algorithms"],
+        "Graphs": ["graph", "tree"],
+        "Arrays & Strings": ["array", "string"]
+    }
+    for label, keywords in dsa_keywords.items():
+        if any(kw in resume_lower for kw in keywords):
+            resume_insights["dsa_exposure"].append(label)
 
-    if "operating system" in resume_lower or "os" in resume_lower:
-        resume_insights["csf_exposure"].append("OS")
-
-    if "dbms" in resume_lower:
-        resume_insights["csf_exposure"].append("DBMS")
+    # CSF Exposure
+    csf_keywords = {
+        "OS": ["operating system", "os"],
+        "DBMS": ["dbms", "database", "sql", "mongodb"],
+        "CN": ["computer network", "cn"],
+        "OOPs": ["oops", "object oriented"]
+    }
+    for label, keywords in csf_keywords.items():
+        if any(kw in resume_lower for kw in keywords):
+            resume_insights["csf_exposure"].append(label)
 
     # -------- Store Only Important Links --------
     extracted_links = {
