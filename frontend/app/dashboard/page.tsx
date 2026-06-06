@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 const COLORS = ["#22c55e", "#eab308", "#ef4444"];
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export default function Dashboard() {
   const [selectedStrategy, setSelectedStrategy] = useState("Balanced Interview");
@@ -98,7 +99,7 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/api/analyze-resume", {
+      const res = await fetch(`${BACKEND_URL}/api/analyze-resume`, {
         method: "POST",
         body: formData,
       });
@@ -173,7 +174,7 @@ export default function Dashboard() {
     }
 
     try {
-      const res = await fetch("http://localhost:8000/api/generate-questions", {
+      const res = await fetch(`${BACKEND_URL}/api/generate-questions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
